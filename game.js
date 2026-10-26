@@ -6,10 +6,11 @@ const CONFIG = {
   TARGET_CATCH: 20,      // 성공 조건: 몇 마리 잡기
   MAX_DAMAGE: 5,         // 실패 조건: 몇 번 놓치면 끝
   MOLE_UP_TIME: 2000,    // 두더지 올라와 있는 시간 (ms)
-  SPAWN_INTERVAL: 1200,   // 두더지 기본 등장 간격 (800ms = 속도 1단계)
+  SPAWN_INTERVAL: 800,   // 두더지 기본 등장 간격 (800ms = 속도 1단계)
   SPEED_STEP: 150,       // 속도 1단계당 줄어들 간격 (ms)
   MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
   MAX_SPEED_LEVEL: 5,    // 최대 속도 단계 (5단계까지만 가능)
+  CATCH_PER_SPEEDUP: 5,  // 👈 5마리 잡을 때마다 속도 1단계 상승
   COMBO_START: 5,        // 콤보 시작 마릿수
 };
 
@@ -26,7 +27,7 @@ let state = {
   activeHole: -1,
   moleTimer: null,
   upTimer: null,
-  speedLevel: 1,
+  speedLevel: 1, // 현재 속도 (1 ~ 5)
 };
 
 let bestScore = 0;
@@ -43,8 +44,6 @@ const scoreEl  = document.getElementById('score');
 const bestEl   = document.getElementById('best');
 const muteBtn  = document.getElementById('muteBtn');
 const pauseBtn = document.getElementById('pauseBtn');
-const speedUpBtn = document.getElementById('speedUpBtn');
-const speedDownBtn = document.getElementById('speedDownBtn');
 const speedLabel = document.getElementById('speedLabel');
 const overlay  = document.getElementById('overlay');
 const panel    = document.getElementById('panel');
@@ -129,8 +128,6 @@ function updateMuteButton() {
 }
 function updateSpeedUI() {
   speedLabel.textContent = `속도 ${state.speedLevel}`;
-  speedUpBtn.disabled = (state.speedLevel >= CONFIG.MAX_SPEED_LEVEL);
-  speedDownBtn.disabled = (state.speedLevel <= 1);
 }
 
 /* =========================================================
@@ -141,7 +138,7 @@ function startGame() {
     caught: 0, damage: 0, combo: 0, score: 0,
     isPlaying: true, isPaused: false, activeHole: -1,
     moleTimer: null, upTimer: null,
-    speedLevel: 1,
+    speedLevel: 1, // 👈 시작은 항상 1단계
   };
   updateHUD();
   updateSpeedUI();
@@ -178,11 +175,12 @@ function endGame(win) {
 }
 
 /* =========================================================
-   두더지 등장 / 도망 (일시정지 완벽 반영)
+   두더지 등장 / 도망
    ========================================================= */
 function scheduleNextMole() {
   if (!state.isPlaying || state.isPaused) return;
 
+  // 현재 속도 레벨에 따른 등장 간격 계산
   const currentInterval = Math.max(
     CONFIG.MIN_INTERVAL, 
     CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
@@ -202,7 +200,7 @@ function spawnMole() {
   fieldEl.children[idx].classList.add('active');
 
   state.upTimer = setTimeout(() => {
-    if (state.isPaused) return; // 일시정지 중이면 도망가지 않음
+    if (state.isPaused) return; 
     if (state.activeHole === idx) moleEscaped();
   }, CONFIG.MOLE_UP_TIME);
 }
@@ -223,7 +221,7 @@ function moleEscaped() {
 }
 
 /* =========================================================
-   구멍 클릭
+   구멍 클릭 (5마리마다 자동 속도 상승)
    ========================================================= */
 function onHoleClick(idx) {
   if (!state.isPlaying || state.isPaused) return;
@@ -242,6 +240,18 @@ function onHoleClick(idx) {
 
   playSound('hit');
   updateHUD();
+
+  // 👇 5마리 잡을 때마다 속도 상승 (최대 5단계)
+  if (state.caught % CONFIG.CATCH_PER_SPEEDUP === 0) {
+    if (state.speedLevel < CONFIG.MAX_SPEED_LEVEL) {
+      state.speedLevel++;
+      updateSpeedUI();
+      
+      // 다음 두더지부터 빨라진 속도 적용
+      clearTimeout(state.moleTimer);
+      scheduleNextMole(); 
+    }
+  }
 
   if (state.caught >= CONFIG.TARGET_CATCH) endGame(true);
 }
@@ -277,7 +287,6 @@ pauseBtn.addEventListener('click', () => {
   if (!state.isPlaying) return;
 
   if (state.isPaused) {
-    // 재개
     state.isPaused = false;
     pauseBtn.textContent = '⏸️';
     
@@ -290,36 +299,11 @@ pauseBtn.addEventListener('click', () => {
     }
     scheduleNextMole();
   } else {
-    // 일시정지
     state.isPaused = true;
     pauseBtn.textContent = '▶️';
     clearTimeout(state.moleTimer);
     clearTimeout(state.upTimer);
-    // 화면의 두더지는 그대로 둠 (안 사라짐)
   }
-});
-
-/* =========================================================
-   버튼 이벤트: 속도 UP / DOWN
-   ========================================================= */
-speedUpBtn.addEventListener('click', () => {
-  if (!state.isPlaying || state.isPaused) return;
-  if (state.speedLevel >= CONFIG.MAX_SPEED_LEVEL) return;
-
-  state.speedLevel++;
-  updateSpeedUI();
-  clearTimeout(state.moleTimer);
-  scheduleNextMole();
-});
-
-speedDownBtn.addEventListener('click', () => {
-  if (!state.isPlaying || state.isPaused) return;
-  if (state.speedLevel <= 1) return;
-
-  state.speedLevel--;
-  updateSpeedUI();
-  clearTimeout(state.moleTimer);
-  scheduleNextMole();
 });
 
 /* =========================================================

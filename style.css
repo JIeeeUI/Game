@@ -87,11 +87,11 @@ body {
 #footer > div {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* 공통 버튼 스타일 */
-#muteBtn, #pauseBtn, #speedUpBtn, #speedDownBtn {
+#muteBtn, #pauseBtn {
   background: #FFF8DC;
   border: 2px solid #5C2E0E;
   border-radius: 8px;
@@ -101,14 +101,14 @@ body {
   cursor: pointer;
 }
 
-/* 속도 업/다운 버튼 색상 */
-#speedUpBtn { color: #D32F2F; }   /* 빨간색 (올리기) */
-#speedDownBtn { color: #1976D2; } /* 파란색 (내리기) */
-
-#speedUpBtn:disabled, #speedDownBtn:disabled {
-  background: #CCC;
-  color: #666;
-  cursor: not-allowed;
+/* 속도 라벨 스타일 (강조) */
+#speedLabel {
+  background: #FFB300;
+  color: #3E1F00;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 2px solid #5C2E0E;
+  font-weight: bold;
 }
 
 /* ===== 오버레이 (시작/결과) ===== */
