@@ -6,8 +6,10 @@ const CONFIG = {
   TARGET_CATCH: 20,      // 성공 조건: 몇 마리 잡기
   MAX_DAMAGE: 5,         // 실패 조건: 몇 번 놓치면 끝
   MOLE_UP_TIME: 2000,    // 두더지 올라와 있는 시간 (ms)
-  SPAWN_INTERVAL: 800,   // 두더지 등장 간격 (ms) ← 난이도 값
+  SPAWN_INTERVAL: 800,   // 두더지 기본 등장 간격 (ms)
   COMBO_START: 5,        // 콤보 시작 마릿수
+  SPEED_STEP: 150,       // 속도 UP 버튼 누를 때마다 줄어들 간격 (ms)
+  MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
 };
 
 /* =========================================================
@@ -23,6 +25,7 @@ let state = {
   activeHole: -1,
   moleTimer: null,
   upTimer: null,
+  speedLevel: 1, // 👈 속도 레벨 추가
 };
 
 let bestScore = 0;
@@ -38,6 +41,8 @@ const comboEl  = document.getElementById('combo');
 const scoreEl  = document.getElementById('score');
 const bestEl   = document.getElementById('best');
 const muteBtn  = document.getElementById('muteBtn');
+const pauseBtn = document.getElementById('pauseBtn'); // 👈 추가
+const speedBtn = document.getElementById('speedBtn'); // 👈 추가
 const overlay  = document.getElementById('overlay');
 const panel    = document.getElementById('panel');
 
@@ -139,8 +144,15 @@ function startGame() {
     caught: 0, damage: 0, combo: 0, score: 0,
     isPlaying: true, isPaused: false, activeHole: -1,
     moleTimer: null, upTimer: null,
+    speedLevel: 1, // 👈 속도 초기화
   };
   updateHUD();
+  
+  // 버튼 초기화
+  pauseBtn.textContent = '⏸️';
+  speedBtn.disabled = false;
+  speedBtn.textContent = '⚡ 속도 UP';
+
   overlay.classList.add('hidden');
   scheduleNextMole();
 }
@@ -176,11 +188,18 @@ function endGame(win) {
    ========================================================= */
 function scheduleNextMole() {
   if (!state.isPlaying || state.isPaused) return;
+
+  // 👇 현재 속도 레벨에 따른 등장 간격 계산
+  const currentInterval = Math.max(
+    CONFIG.MIN_INTERVAL, 
+    CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
+  );
+
   state.moleTimer = setTimeout(() => {
     if (!state.isPlaying || state.isPaused) return;
     spawnMole();
     scheduleNextMole();
-  }, CONFIG.SPAWN_INTERVAL);
+  }, currentInterval); // 계산된 간격 적용
 }
 
 function spawnMole() {
@@ -240,6 +259,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (state.isPlaying) {
       state.isPaused = true;
+      pauseBtn.textContent = '▶️'; // 👈 버튼 아이콘 동기화 추가
       clearTimeout(state.moleTimer);
       clearTimeout(state.upTimer);
       if (state.activeHole !== -1) {
@@ -250,13 +270,59 @@ document.addEventListener('visibilitychange', () => {
   } else {
     if (state.isPlaying && state.isPaused) {
       state.isPaused = false;
+      pauseBtn.textContent = '⏸️'; // 👈 버튼 아이콘 동기화 추가
       scheduleNextMole();
     }
   }
 });
 
 /* =========================================================
-   음소거
+   버튼 이벤트: 일시정지
+   ========================================================= */
+pauseBtn.addEventListener('click', () => {
+  if (!state.isPlaying) return;
+
+  if (state.isPaused) {
+    state.isPaused = false;
+    pauseBtn.textContent = '⏸️';
+    scheduleNextMole();
+  } else {
+    state.isPaused = true;
+    pauseBtn.textContent = '▶️';
+    clearTimeout(state.moleTimer);
+    clearTimeout(state.upTimer);
+    if (state.activeHole !== -1) {
+      fieldEl.children[state.activeHole].classList.remove('active');
+      state.activeHole = -1;
+    }
+  }
+});
+
+/* =========================================================
+   버튼 이벤트: 속도 UP
+   ========================================================= */
+speedBtn.addEventListener('click', () => {
+  if (!state.isPlaying || state.isPaused) return;
+
+  const currentInterval = Math.max(
+    CONFIG.MIN_INTERVAL, 
+    CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
+  );
+
+  if (currentInterval <= CONFIG.MIN_INTERVAL) {
+    speedBtn.disabled = true;
+    return;
+  }
+
+  state.speedLevel++;
+  speedBtn.textContent = `⚡ 속도 ${state.speedLevel}`;
+  
+  clearTimeout(state.moleTimer);
+  scheduleNextMole();
+});
+
+/* =========================================================
+   버튼 이벤트: 음소거
    ========================================================= */
 muteBtn.addEventListener('click', () => {
   muted = !muted;
