@@ -22,20 +22,23 @@ body {
   box-shadow: 0 8px 20px rgba(0,0,0,0.4);
 }
 
-/* 상단 상태 표시 */
+/* 상단 상태 표시 (한 줄 고정) */
 #hud {
   background: #FFF8DC;
   border: 3px solid #5C2E0E;
   border-radius: 10px;
-  padding: 10px;
+  padding: 10px 8px;
   margin-bottom: 12px;
-  font-size: 15px;
+  font-size: 13px; /* 글자 크기 축소 */
   font-weight: bold;
   color: #3E1F00;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
   justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 400px) {
+  #hud { font-size: 11px; padding: 8px 4px; }
 }
 
 /* 3x3 밭 */
@@ -83,7 +86,6 @@ body {
   font-size: 14px;
 }
 
-/* 버튼들을 감싸는 div 정렬 */
 #footer > div {
   display: flex;
   align-items: center;
@@ -101,17 +103,33 @@ body {
   cursor: pointer;
 }
 
-/* 속도 라벨 스타일 (강조) */
-#speedLabel {
-  background: #FFB300;
-  color: #3E1F00;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 2px solid #5C2E0E;
-  font-weight: bold;
+/* ===== 속도 UP 알림 ===== */
+#speedAlert {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  font-size: 40px;
+  font-weight: 900;
+  color: #FFEB3B;
+  text-shadow: 3px 3px 0 #D32F2F, -2px -2px 0 #D32F2F, 2px -2px 0 #D32F2F, -2px 2px 0 #D32F2F;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
 }
 
-/* ===== 오버레이 (시작/결과) ===== */
+#speedAlert.show {
+  animation: popUp 1s ease-out forwards;
+}
+
+@keyframes popUp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+}
+
+/* ===== 공통 오버레이 (시작/결과) ===== */
 #overlay {
   position: fixed;
   inset: 0;
@@ -122,10 +140,35 @@ body {
   padding: 16px;
   z-index: 10;
 }
-
 #overlay.hidden { display: none; }
 
-#panel {
+/* ===== 일시정지 오버레이 ===== */
+#pauseOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 20;
+}
+#pauseOverlay.hidden { display: none; }
+
+#pausePanel {
+  background: #FFF8DC;
+  border: 6px solid #5C2E0E;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 320px;
+  width: 100%;
+  text-align: center;
+  color: #3E1F00;
+}
+#pausePanel h2 { font-size: 24px; margin-bottom: 8px; }
+#pausePanel p { font-size: 14px; margin-bottom: 20px; }
+
+/* ===== 패널(시작/결과/일시정지) 내부 공통 ===== */
+#panel, #pausePanel {
   background: #FFF8DC;
   border: 6px solid #5C2E0E;
   border-radius: 16px;
@@ -135,25 +178,44 @@ body {
   text-align: center;
   color: #3E1F00;
 }
-
 #panel h1 { font-size: 24px; margin-bottom: 12px; }
 #panel h2 { font-size: 22px; margin-bottom: 12px; }
 #panel p  { font-size: 14px; line-height: 1.7; margin-bottom: 8px; }
 #panel ul { text-align: left; margin: 12px 0 16px 20px; font-size: 14px; line-height: 1.9; }
 
-#panel button {
-  background: #FFB300;
-  border: 3px solid #5C2E0E;
-  border-radius: 10px;
-  padding: 12px 28px;
-  font-size: 18px;
-  font-weight: bold;
-  color: #3E1F00;
-  cursor: pointer;
+/* ===== 버튼 그룹 정렬 ===== */
+#btnGroup, .btn-group {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
   margin-top: 12px;
 }
 
-#panel button:hover { background: #FFC933; }
+/* 공통 게임 버튼 (노란색) */
+.btn-restart {
+  background: #FFB300;
+  color: #3E1F00;
+  border: 3px solid #5C2E0E;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.btn-restart:hover { background: #FFC933; }
+
+/* 이어서 하기 버튼 (초록색) */
+.btn-resume {
+  background: #4CAF50;
+  color: white;
+  border: 3px solid #5C2E0E;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.btn-resume:hover { background: #66BB6A; }
 
 /* 콤보 강조 */
 .combo-hot { color: #E65100; }

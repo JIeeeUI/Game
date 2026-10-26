@@ -21,18 +21,20 @@
     <!-- 3x3 밭 (구멍 9칸, JS로 채움) -->
     <div id="field"></div>
 
-    <!-- 하단: 최고점수 / 현재속도 / 일시정지 / 음소거 -->
+    <!-- 하단: 최고점수 / 일시정지 / 음소거 -->
     <div id="footer">
       <span>🏆 최고 점수: <span id="best">0</span></span>
       <div>
-        <span id="speedLabel">속도 1</span>
         <button id="pauseBtn">⏸️</button>
         <button id="muteBtn">🔊</button>
       </div>
     </div>
   </div>
 
-  <!-- 오버레이: 시작/결과 화면 -->
+  <!-- 👇 속도 UP 알림을 띄울 요소 -->
+  <div id="speedAlert">⚡ 속도 UP!</div>
+
+  <!-- 시작/결과 화면 오버레이 -->
   <div id="overlay">
     <div id="panel">
       <h1>🌾 농장 지키기 🐹</h1>
@@ -44,7 +46,24 @@
         <li>🔥 5마리 연속 잡으면 콤보 보너스!</li>
         <li>⚡ 5마리 잡을 때마다 점점 빨라져요!</li>
       </ul>
-      <button id="startBtn">게임 시작</button>
+      
+      <div id="btnGroup">
+        <!-- '이어서 하기' 버튼 (처음엔 숨김 처리) -->
+        <button id="continueBtn" class="btn-resume" style="display: none;">이어서 하기</button>
+        <button id="startBtn" class="btn-restart">게임 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 👇 일시정지 오버레이 -->
+  <div id="pauseOverlay" class="hidden">
+    <div id="pausePanel">
+      <h2>⏸️ 일시정지</h2>
+      <p>잠시 쉬어가세요!</p>
+      <div class="btn-group">
+        <button id="resumeBtn" class="btn-resume">이어서 하기</button>
+        <button id="restartBtn" class="btn-restart">처음부터</button>
+      </div>
     </div>
   </div>
 

@@ -10,7 +10,7 @@ const CONFIG = {
   SPEED_STEP: 150,       // 속도 1단계당 줄어들 간격 (ms)
   MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
   MAX_SPEED_LEVEL: 5,    // 최대 속도 단계 (5단계까지만 가능)
-  CATCH_PER_SPEEDUP: 5,  // 👈 5마리 잡을 때마다 속도 1단계 상승
+  CATCH_PER_SPEEDUP: 5,  // 5마리 잡을 때마다 속도 1단계 상승
   COMBO_START: 5,        // 콤보 시작 마릿수
 };
 
@@ -32,6 +32,7 @@ let state = {
 
 let bestScore = 0;
 let muted = false;
+let lastSpeedLevel = 1; // 게임 종료 시점의 속도 기억
 
 /* =========================================================
    DOM 요소
@@ -44,9 +45,13 @@ const scoreEl  = document.getElementById('score');
 const bestEl   = document.getElementById('best');
 const muteBtn  = document.getElementById('muteBtn');
 const pauseBtn = document.getElementById('pauseBtn');
-const speedLabel = document.getElementById('speedLabel');
 const overlay  = document.getElementById('overlay');
 const panel    = document.getElementById('panel');
+const startBtn = document.getElementById('startBtn'); 
+const pauseOverlay = document.getElementById('pauseOverlay');
+const resumeBtn = document.getElementById('resumeBtn');
+const restartBtn = document.getElementById('restartBtn');
+const speedAlert = document.getElementById('speedAlert');
 
 /* =========================================================
    밭 생성
@@ -126,25 +131,36 @@ function updateHUD() {
 function updateMuteButton() {
   muteBtn.textContent = muted ? '🔇' : '🔊';
 }
-function updateSpeedUI() {
-  speedLabel.textContent = `속도 ${state.speedLevel}`;
+function showSpeedAlert() {
+  speedAlert.classList.remove('show');
+  void speedAlert.offsetWidth; // 애니메이션 재시작 트릭
+  speedAlert.classList.add('show');
 }
 
 /* =========================================================
    게임 시작 / 종료
    ========================================================= */
-function startGame() {
+function startNewGame() {
+  lastSpeedLevel = 1;
+  initGame(1);
+}
+
+function continueGame() {
+  initGame(lastSpeedLevel);
+}
+
+function initGame(speedLevel) {
   state = {
     caught: 0, damage: 0, combo: 0, score: 0,
     isPlaying: true, isPaused: false, activeHole: -1,
     moleTimer: null, upTimer: null,
-    speedLevel: 1, // 👈 시작은 항상 1단계
+    speedLevel: speedLevel,
   };
   updateHUD();
-  updateSpeedUI();
   
   pauseBtn.textContent = '⏸️';
   overlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
   scheduleNextMole();
 }
 
@@ -160,17 +176,26 @@ function endGame(win) {
     saveData();
   }
 
+  lastSpeedLevel = state.speedLevel; // 현재 속도 저장
+
   panel.innerHTML = win
     ? `<h2>🎉 성공! 농장을 지켰어요!</h2>
        <p>잡은 두더지: <b>${state.caught}</b>마리</p>
        <p>최종 점수: <b>${state.score}</b></p>
-       <button id="startBtn">다시 도전</button>`
+       <div class="btn-group">
+         <button id="continueBtn" class="btn-resume">이어서 하기</button>
+         <button id="startBtn" class="btn-restart">다시 도전</button>
+       </div>`
     : `<h2>😢 실패... 농작물이 망가졌어요</h2>
        <p>잡은 두더지: <b>${state.caught}</b>마리</p>
        <p>최종 점수: <b>${state.score}</b></p>
-       <button id="startBtn">다시 도전</button>`;
+       <div class="btn-group">
+         <button id="continueBtn" class="btn-resume">이어서 하기</button>
+         <button id="startBtn" class="btn-restart">다시 도전</button>
+       </div>`;
 
-  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('startBtn').addEventListener('click', startNewGame);
+  document.getElementById('continueBtn').addEventListener('click', continueGame);
   overlay.classList.remove('hidden');
 }
 
@@ -180,7 +205,6 @@ function endGame(win) {
 function scheduleNextMole() {
   if (!state.isPlaying || state.isPaused) return;
 
-  // 현재 속도 레벨에 따른 등장 간격 계산
   const currentInterval = Math.max(
     CONFIG.MIN_INTERVAL, 
     CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
@@ -221,7 +245,7 @@ function moleEscaped() {
 }
 
 /* =========================================================
-   구멍 클릭 (5마리마다 자동 속도 상승)
+   구멍 클릭
    ========================================================= */
 function onHoleClick(idx) {
   if (!state.isPlaying || state.isPaused) return;
@@ -241,13 +265,10 @@ function onHoleClick(idx) {
   playSound('hit');
   updateHUD();
 
-  // 👇 5마리 잡을 때마다 속도 상승 (최대 5단계)
   if (state.caught % CONFIG.CATCH_PER_SPEEDUP === 0) {
     if (state.speedLevel < CONFIG.MAX_SPEED_LEVEL) {
       state.speedLevel++;
-      updateSpeedUI();
-      
-      // 다음 두더지부터 빨라진 속도 적용
+      showSpeedAlert();
       clearTimeout(state.moleTimer);
       scheduleNextMole(); 
     }
@@ -261,21 +282,18 @@ function onHoleClick(idx) {
    ========================================================= */
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (state.isPlaying) {
+    if (state.isPlaying && !state.isPaused) {
       state.isPaused = true;
       pauseBtn.textContent = '▶️';
+      pauseOverlay.classList.remove('hidden');
+      
       clearTimeout(state.moleTimer);
       clearTimeout(state.upTimer);
+      
       if (state.activeHole !== -1) {
         fieldEl.children[state.activeHole].classList.remove('active');
         state.activeHole = -1;
       }
-    }
-  } else {
-    if (state.isPlaying && state.isPaused) {
-      state.isPaused = false;
-      pauseBtn.textContent = '⏸️';
-      scheduleNextMole();
     }
   }
 });
@@ -284,26 +302,39 @@ document.addEventListener('visibilitychange', () => {
    버튼 이벤트: 일시정지
    ========================================================= */
 pauseBtn.addEventListener('click', () => {
-  if (!state.isPlaying) return;
+  if (!state.isPlaying || state.isPaused) return;
 
-  if (state.isPaused) {
-    state.isPaused = false;
-    pauseBtn.textContent = '⏸️';
-    
-    if (state.activeHole !== -1) {
-      const idx = state.activeHole;
-      state.upTimer = setTimeout(() => {
-        if (state.isPaused) return;
-        if (state.activeHole === idx) moleEscaped();
-      }, CONFIG.MOLE_UP_TIME);
-    }
-    scheduleNextMole();
-  } else {
-    state.isPaused = true;
-    pauseBtn.textContent = '▶️';
-    clearTimeout(state.moleTimer);
-    clearTimeout(state.upTimer);
+  state.isPaused = true;
+  pauseBtn.textContent = '▶️';
+  pauseOverlay.classList.remove('hidden');
+  
+  clearTimeout(state.moleTimer);
+  clearTimeout(state.upTimer);
+});
+
+/* =========================================================
+   버튼 이벤트: 일시정지 화면 내부 버튼
+   ========================================================= */
+resumeBtn.addEventListener('click', () => {
+  if (!state.isPlaying || !state.isPaused) return;
+
+  state.isPaused = false;
+  pauseBtn.textContent = '⏸️';
+  pauseOverlay.classList.add('hidden');
+
+  if (state.activeHole !== -1) {
+    const idx = state.activeHole;
+    state.upTimer = setTimeout(() => {
+      if (state.isPaused) return;
+      if (state.activeHole === idx) moleEscaped();
+    }, CONFIG.MOLE_UP_TIME);
   }
+  scheduleNextMole();
+});
+
+restartBtn.addEventListener('click', () => {
+  pauseOverlay.classList.add('hidden');
+  startNewGame();
 });
 
 /* =========================================================
@@ -321,5 +352,4 @@ muteBtn.addEventListener('click', () => {
 buildField();
 loadData();
 updateHUD();
-updateSpeedUI();
-document.getElementById('startBtn').addEventListener('click', startGame);
+startBtn.addEventListener('click', startNewGame);
