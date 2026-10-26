@@ -7,9 +7,9 @@ const CONFIG = {
   MAX_DAMAGE: 5,         // 실패 조건: 몇 번 놓치면 끝
   MOLE_UP_TIME: 2000,    // 두더지 올라와 있는 시간 (ms)
   SPAWN_INTERVAL: 800,   // 두더지 기본 등장 간격 (800ms = 속도 1단계)
-  SPEED_STEP: 150,       // 속도 1단계당 줄어들 간격 (ms)
+  SPEED_STEP: 50,        // 👈 속도 1단계당 줄어들 간격 (10단계까지 오르도록 50으로 조정)
   MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
-  MAX_SPEED_LEVEL: 5,    // 최대 속도 단계 (5단계까지만 가능)
+  MAX_SPEED_LEVEL: 10,   // 👈 최대 속도 10단계로 상향
   CATCH_PER_SPEEDUP: 5,  // 5마리 잡을 때마다 속도 1단계 상승
   COMBO_START: 5,        // 콤보 시작 마릿수
 };
@@ -27,12 +27,12 @@ let state = {
   activeHole: -1,
   moleTimer: null,
   upTimer: null,
-  speedLevel: 1, // 현재 속도 (1 ~ 5)
+  speedLevel: 1, // 현재 속도 (1 ~ 10)
 };
 
 let bestScore = 0;
 let muted = false;
-let lastSpeedLevel = 1; // 게임 종료 시점의 속도 기억
+let lastSpeedLevel = 1; // 게임 종료 시점의 속도를 기억하는 변수
 
 /* =========================================================
    DOM 요소
@@ -138,18 +138,30 @@ function showSpeedAlert() {
 }
 
 /* =========================================================
+   화면 청소 (두더지 내리기)
+   ========================================================= */
+function clearAllMoles() {
+  document.querySelectorAll('.hole.active').forEach(h => h.classList.remove('active'));
+  state.activeHole = -1;
+  clearTimeout(state.upTimer);
+  clearTimeout(state.moleTimer);
+}
+
+/* =========================================================
    게임 시작 / 종료
    ========================================================= */
 function startNewGame() {
-  lastSpeedLevel = 1;
+  lastSpeedLevel = 1; // '다시 도전'은 무조건 1단계부터
   initGame(1);
 }
 
 function continueGame() {
-  initGame(lastSpeedLevel);
+  initGame(lastSpeedLevel); // 👈 '이어서 하기'는 끝났던 속도부터
 }
 
 function initGame(speedLevel) {
+  clearAllMoles(); 
+
   state = {
     caught: 0, damage: 0, combo: 0, score: 0,
     isPlaying: true, isPaused: false, activeHole: -1,
@@ -166,9 +178,7 @@ function initGame(speedLevel) {
 
 function endGame(win) {
   state.isPlaying = false;
-  clearTimeout(state.moleTimer);
-  clearTimeout(state.upTimer);
-  document.querySelectorAll('.hole.active').forEach(h => h.classList.remove('active'));
+  clearAllMoles(); 
 
   if (state.score > bestScore) {
     bestScore = state.score;
@@ -176,7 +186,8 @@ function endGame(win) {
     saveData();
   }
 
-  lastSpeedLevel = state.speedLevel; // 현재 속도 저장
+  // 👇 게임이 끝난 시점의 속도를 기억합니다. (이어서 하기 위함)
+  lastSpeedLevel = state.speedLevel; 
 
   panel.innerHTML = win
     ? `<h2>🎉 성공! 농장을 지켰어요!</h2>
