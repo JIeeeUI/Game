@@ -1,1 +1,140 @@
+/* ===== 기본 리셋 ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
+body {
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  background: #87CEEB; /* 하늘색 */
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+}
+
+/* 게임 전체 컨테이너 */
+#game {
+  width: 100%;
+  max-width: 480px;
+  background: #8B4513; /* 흙갈색 */
+  border: 6px solid #5C2E0E;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+/* 상단 상태 표시 */
+#hud {
+  background: #FFF8DC;
+  border: 3px solid #5C2E0E;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #3E1F00;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+/* 3x3 밭 */
+#field {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* 구멍 하나 */
+.hole {
+  aspect-ratio: 1 / 1;
+  background: #4A2505;
+  border-radius: 50%;
+  border: 4px solid #2E1400;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 40px;
+  user-select: none;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 두더지 이모지 (기본은 아래로 숨김) */
+.hole .mole {
+  transform: translateY(100%);
+  transition: transform 0.15s ease-out;
+}
+
+/* 두더지 활성화 상태 */
+.hole.active .mole {
+  transform: translateY(0);
+}
+
+/* 하단 정보 */
+#footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #FFF8DC;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+#muteBtn {
+  background: #FFF8DC;
+  border: 2px solid #5C2E0E;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ===== 오버레이 (시작/결과) ===== */
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+#overlay.hidden { display: none; }
+
+#panel {
+  background: #FFF8DC;
+  border: 6px solid #5C2E0E;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  color: #3E1F00;
+}
+
+#panel h1 { font-size: 24px; margin-bottom: 12px; }
+#panel h2 { font-size: 22px; margin-bottom: 12px; }
+#panel p  { font-size: 14px; line-height: 1.7; margin-bottom: 8px; }
+#panel ul { text-align: left; margin: 12px 0 16px 20px; font-size: 14px; line-height: 1.9; }
+
+#panel button {
+  background: #FFB300;
+  border: 3px solid #5C2E0E;
+  border-radius: 10px;
+  padding: 12px 28px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #3E1F00;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+#panel button:hover { background: #FFC933; }
+
+/* 콤보 강조 */
+.combo-hot { color: #E65100; }

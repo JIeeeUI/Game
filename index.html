@@ -1,1 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌾 농장 지키기 - 두더지 잡기</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+  <!-- 게임 전체 컨테이너 -->
+  <div id="game">
+    <!-- 상단: 현재 상태 표시 -->
+    <div id="hud">
+      <span>🐹 잡은 수: <span id="caught">0</span>/20</span>
+      <span>💥 피해: <span id="damage">0</span>/5</span>
+      <span>🔥 콤보: <span id="combo">0</span></span>
+      <span>⭐ 점수: <span id="score">0</span></span>
+    </div>
+
+    <!-- 3x3 밭 (구멍 9칸, JS로 채움) -->
+    <div id="field"></div>
+
+    <!-- 하단: 최고점수 / 음소거 -->
+    <div id="footer">
+      <span>🏆 최고 점수: <span id="best">0</span></span>
+      <button id="muteBtn">🔊</button>
+    </div>
+  </div>
+
+  <!-- 오버레이: 시작/결과 화면 -->
+  <div id="overlay">
+    <div id="panel">
+      <h1>🌾 농장 지키기 🐹</h1>
+      <p>두더지가 농작물을 망치기 전에 잡아주세요!</p>
+      <ul>
+        <li>🎯 <b>성공</b>: 두더지 20마리 잡기</li>
+        <li>❌ <b>실패</b>: 놓친 두더지 5마리</li>
+        <li>🖱️ <b>조작</b>: 두더지를 클릭</li>
+        <li>🔥 5마리 연속 잡으면 콤보 보너스!</li>
+      </ul>
+      <button id="startBtn">게임 시작</button>
+    </div>
+  </div>
+
+  <!-- 게임 로직 -->
+  <script src="game.js"></script>
+</body>
+</html>
