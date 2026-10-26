@@ -21,11 +21,13 @@
     <!-- 3x3 밭 (구멍 9칸, JS로 채움) -->
     <div id="field"></div>
 
-    <!-- 하단: 최고점수 / 속도 / 일시정지 / 음소거 -->
+    <!-- 하단: 최고점수 / 속도조절 / 일시정지 / 음소거 -->
     <div id="footer">
       <span>🏆 최고 점수: <span id="best">0</span></span>
       <div>
-        <button id="speedBtn">⚡ 속도 UP</button>
+        <span id="speedLabel" style="color:#FFF8DC; font-size:14px; margin-right:4px;">속도 1</span>
+        <button id="speedDownBtn">▼</button>
+        <button id="speedUpBtn">▲</button>
         <button id="pauseBtn">⏸️</button>
         <button id="muteBtn">🔊</button>
       </div>
@@ -42,7 +44,7 @@
         <li>❌ <b>실패</b>: 놓친 두더지 5마리</li>
         <li>🖱️ <b>조작</b>: 두더지를 클릭</li>
         <li>🔥 5마리 연속 잡으면 콤보 보너스!</li>
-        <li>⚡ <b>속도 UP</b> 버튼으로 난이도를 높일 수 있어요</li>
+        <li>⚡ <b>속도 조절</b> 버튼으로 난이도를 바꿀 수 있어요</li>
       </ul>
       <button id="startBtn">게임 시작</button>
     </div>

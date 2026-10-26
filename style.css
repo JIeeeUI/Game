@@ -86,32 +86,28 @@ body {
 /* 버튼들을 감싸는 div 정렬 */
 #footer > div {
   display: flex;
-  gap: 6px; /* 버튼 사이 간격 */
+  align-items: center;
+  gap: 6px;
 }
 
 /* 공통 버튼 스타일 */
-#muteBtn, #pauseBtn {
+#muteBtn, #pauseBtn, #speedUpBtn, #speedDownBtn {
   background: #FFF8DC;
   border: 2px solid #5C2E0E;
   border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-/* 속도 UP 버튼 */
-#speedBtn {
-  background: #FF5252; /* 눈에 띄는 빨간색 */
-  color: white;
-  border: 2px solid #5C2E0E;
-  border-radius: 8px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   font-size: 14px;
   font-weight: bold;
   cursor: pointer;
 }
-#speedBtn:disabled {
-  background: #999; /* 속도 최대치 도달 시 회색 */
+
+/* 속도 업/다운 버튼 색상 */
+#speedUpBtn { color: #D32F2F; }   /* 빨간색 (올리기) */
+#speedDownBtn { color: #1976D2; } /* 파란색 (내리기) */
+
+#speedUpBtn:disabled, #speedDownBtn:disabled {
+  background: #CCC;
+  color: #666;
   cursor: not-allowed;
 }
 

@@ -1,15 +1,16 @@
 /* =========================================================
-   게임 설정값 (여기 숫자만 바꾸면 난이도 조절)
+   게임 설정값
    ========================================================= */
 const CONFIG = {
   TOTAL_HOLES: 9,        // 구멍 개수 (3x3)
   TARGET_CATCH: 20,      // 성공 조건: 몇 마리 잡기
   MAX_DAMAGE: 5,         // 실패 조건: 몇 번 놓치면 끝
   MOLE_UP_TIME: 2000,    // 두더지 올라와 있는 시간 (ms)
-  SPAWN_INTERVAL: 800,   // 두더지 기본 등장 간격 (ms)
-  COMBO_START: 5,        // 콤보 시작 마릿수
-  SPEED_STEP: 150,       // 속도 UP 버튼 누를 때마다 줄어들 간격 (ms)
+  SPAWN_INTERVAL: 1200,   // 두더지 기본 등장 간격 (800ms = 속도 1단계)
+  SPEED_STEP: 150,       // 속도 1단계당 줄어들 간격 (ms)
   MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
+  MAX_SPEED_LEVEL: 5,    // 최대 속도 단계 (5단계까지만 가능)
+  COMBO_START: 5,        // 콤보 시작 마릿수
 };
 
 /* =========================================================
@@ -25,7 +26,7 @@ let state = {
   activeHole: -1,
   moleTimer: null,
   upTimer: null,
-  speedLevel: 1, // 👈 속도 레벨 추가
+  speedLevel: 1,
 };
 
 let bestScore = 0;
@@ -41,8 +42,10 @@ const comboEl  = document.getElementById('combo');
 const scoreEl  = document.getElementById('score');
 const bestEl   = document.getElementById('best');
 const muteBtn  = document.getElementById('muteBtn');
-const pauseBtn = document.getElementById('pauseBtn'); // 👈 추가
-const speedBtn = document.getElementById('speedBtn'); // 👈 추가
+const pauseBtn = document.getElementById('pauseBtn');
+const speedUpBtn = document.getElementById('speedUpBtn');
+const speedDownBtn = document.getElementById('speedDownBtn');
+const speedLabel = document.getElementById('speedLabel');
 const overlay  = document.getElementById('overlay');
 const panel    = document.getElementById('panel');
 
@@ -61,15 +64,12 @@ function buildField() {
 }
 
 /* =========================================================
-   효과음 (Web Audio API)
+   효과음
    ========================================================= */
 let audioCtx = null;
-
 function playSound(type) {
   if (muted) return;
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.connect(gain);
@@ -81,23 +81,20 @@ function playSound(type) {
     osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
     gain.gain.setValueAtTime(0.2, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    osc.start(now);
-    osc.stop(now + 0.1);
+    osc.start(now); osc.stop(now + 0.1);
   } else if (type === 'miss') {
     osc.frequency.setValueAtTime(200, now);
     osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
     gain.gain.setValueAtTime(0.25, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc.start(now);
-    osc.stop(now + 0.3);
+    osc.start(now); osc.stop(now + 0.3);
   }
 }
 
 /* =========================================================
-   저장 / 불러오기 (손상 복구 포함)
+   저장 / 불러오기
    ========================================================= */
 const STORAGE_KEY = 'moleGameData';
-
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -106,19 +103,15 @@ function loadData() {
     bestScore = Number.isFinite(data.bestScore) ? data.bestScore : 0;
     muted     = typeof data.muted === 'boolean' ? data.muted : false;
   } catch (e) {
-    bestScore = 0;
-    muted = false;
+    bestScore = 0; muted = false;
   }
   bestEl.textContent = bestScore;
   updateMuteButton();
 }
-
 function saveData() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ bestScore, muted }));
-  } catch (e) {
-    console.warn('저장 실패:', e);
-  }
+  } catch (e) { console.warn('저장 실패:', e); }
 }
 
 /* =========================================================
@@ -131,9 +124,13 @@ function updateHUD() {
   scoreEl.textContent  = state.score;
   comboEl.classList.toggle('combo-hot', state.combo >= CONFIG.COMBO_START);
 }
-
 function updateMuteButton() {
   muteBtn.textContent = muted ? '🔇' : '🔊';
+}
+function updateSpeedUI() {
+  speedLabel.textContent = `속도 ${state.speedLevel}`;
+  speedUpBtn.disabled = (state.speedLevel >= CONFIG.MAX_SPEED_LEVEL);
+  speedDownBtn.disabled = (state.speedLevel <= 1);
 }
 
 /* =========================================================
@@ -144,15 +141,12 @@ function startGame() {
     caught: 0, damage: 0, combo: 0, score: 0,
     isPlaying: true, isPaused: false, activeHole: -1,
     moleTimer: null, upTimer: null,
-    speedLevel: 1, // 👈 속도 초기화
+    speedLevel: 1,
   };
   updateHUD();
+  updateSpeedUI();
   
-  // 버튼 초기화
   pauseBtn.textContent = '⏸️';
-  speedBtn.disabled = false;
-  speedBtn.textContent = '⚡ 속도 UP';
-
   overlay.classList.add('hidden');
   scheduleNextMole();
 }
@@ -184,12 +178,11 @@ function endGame(win) {
 }
 
 /* =========================================================
-   두더지 등장 / 도망
+   두더지 등장 / 도망 (일시정지 완벽 반영)
    ========================================================= */
 function scheduleNextMole() {
   if (!state.isPlaying || state.isPaused) return;
 
-  // 👇 현재 속도 레벨에 따른 등장 간격 계산
   const currentInterval = Math.max(
     CONFIG.MIN_INTERVAL, 
     CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
@@ -199,7 +192,7 @@ function scheduleNextMole() {
     if (!state.isPlaying || state.isPaused) return;
     spawnMole();
     scheduleNextMole();
-  }, currentInterval); // 계산된 간격 적용
+  }, currentInterval);
 }
 
 function spawnMole() {
@@ -209,6 +202,7 @@ function spawnMole() {
   fieldEl.children[idx].classList.add('active');
 
   state.upTimer = setTimeout(() => {
+    if (state.isPaused) return; // 일시정지 중이면 도망가지 않음
     if (state.activeHole === idx) moleEscaped();
   }, CONFIG.MOLE_UP_TIME);
 }
@@ -233,7 +227,7 @@ function moleEscaped() {
    ========================================================= */
 function onHoleClick(idx) {
   if (!state.isPlaying || state.isPaused) return;
-  if (state.activeHole !== idx) return; // 두더지 없는 칸 무시
+  if (state.activeHole !== idx) return;
 
   fieldEl.children[idx].classList.remove('active');
   state.activeHole = -1;
@@ -259,7 +253,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (state.isPlaying) {
       state.isPaused = true;
-      pauseBtn.textContent = '▶️'; // 👈 버튼 아이콘 동기화 추가
+      pauseBtn.textContent = '▶️';
       clearTimeout(state.moleTimer);
       clearTimeout(state.upTimer);
       if (state.activeHole !== -1) {
@@ -270,7 +264,7 @@ document.addEventListener('visibilitychange', () => {
   } else {
     if (state.isPlaying && state.isPaused) {
       state.isPaused = false;
-      pauseBtn.textContent = '⏸️'; // 👈 버튼 아이콘 동기화 추가
+      pauseBtn.textContent = '⏸️';
       scheduleNextMole();
     }
   }
@@ -283,40 +277,47 @@ pauseBtn.addEventListener('click', () => {
   if (!state.isPlaying) return;
 
   if (state.isPaused) {
+    // 재개
     state.isPaused = false;
     pauseBtn.textContent = '⏸️';
+    
+    if (state.activeHole !== -1) {
+      const idx = state.activeHole;
+      state.upTimer = setTimeout(() => {
+        if (state.isPaused) return;
+        if (state.activeHole === idx) moleEscaped();
+      }, CONFIG.MOLE_UP_TIME);
+    }
     scheduleNextMole();
   } else {
+    // 일시정지
     state.isPaused = true;
     pauseBtn.textContent = '▶️';
     clearTimeout(state.moleTimer);
     clearTimeout(state.upTimer);
-    if (state.activeHole !== -1) {
-      fieldEl.children[state.activeHole].classList.remove('active');
-      state.activeHole = -1;
-    }
+    // 화면의 두더지는 그대로 둠 (안 사라짐)
   }
 });
 
 /* =========================================================
-   버튼 이벤트: 속도 UP
+   버튼 이벤트: 속도 UP / DOWN
    ========================================================= */
-speedBtn.addEventListener('click', () => {
+speedUpBtn.addEventListener('click', () => {
   if (!state.isPlaying || state.isPaused) return;
-
-  const currentInterval = Math.max(
-    CONFIG.MIN_INTERVAL, 
-    CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
-  );
-
-  if (currentInterval <= CONFIG.MIN_INTERVAL) {
-    speedBtn.disabled = true;
-    return;
-  }
+  if (state.speedLevel >= CONFIG.MAX_SPEED_LEVEL) return;
 
   state.speedLevel++;
-  speedBtn.textContent = `⚡ 속도 ${state.speedLevel}`;
-  
+  updateSpeedUI();
+  clearTimeout(state.moleTimer);
+  scheduleNextMole();
+});
+
+speedDownBtn.addEventListener('click', () => {
+  if (!state.isPlaying || state.isPaused) return;
+  if (state.speedLevel <= 1) return;
+
+  state.speedLevel--;
+  updateSpeedUI();
   clearTimeout(state.moleTimer);
   scheduleNextMole();
 });
@@ -336,4 +337,5 @@ muteBtn.addEventListener('click', () => {
 buildField();
 loadData();
 updateHUD();
+updateSpeedUI();
 document.getElementById('startBtn').addEventListener('click', startGame);
