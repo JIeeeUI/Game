@@ -1,73 +1,63 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🌾 농장 지키기 - 두더지 잡기</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>점 잇기 퍼즐 (Dot Connect)</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- 게임 전체 컨테이너 -->
-  <div id="game">
-    <!-- 상단: 현재 상태 표시 -->
-    <div id="hud">
-      <span>🐹 잡은 수: <span id="caught">0</span>/20</span>
-      <span>💥 피해: <span id="damage">0</span>/5</span>
-      <span>🔥 콤보: <span id="combo">0</span></span>
-      <span>⭐ 점수: <span id="score">0</span></span>
+<div id="app">
+  <div id="topbar">
+    <div id="hud-info">
+      <div>점수: <span id="target">0</span></div>
+      <div>이동: <span id="moves">0</span></div>
+      <div>최고: <span id="best">0</span></div>
     </div>
-
-    <!-- 3x3 밭 (구멍 9칸, JS로 채움) -->
-    <div id="field"></div>
-
-    <!-- 하단: 최고점수 / 일시정지 / 음소거 -->
-    <div id="footer">
-      <span>🏆 최고 점수: <span id="best">0</span></span>
-      <div>
-        <button id="pauseBtn">⏸️</button>
-        <button id="muteBtn">🔊</button>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <div class="diff-group">
+        <button class="diff-btn active" data-diff="easy">보통 (5x5)</button>
+        <button class="diff-btn" data-diff="hard">어려움 (7x7)</button>
       </div>
+      <button class="btn small" id="btnPause">일시정지</button>
+      <button class="btn small" id="btnSound">소리: 꺼짐</button>
     </div>
   </div>
 
-  <!-- 👇 속도 UP 알림을 띄울 요소 -->
-  <div id="speedAlert">⚡ 속도 UP!</div>
-
-  <!-- 시작/결과 화면 오버레이 -->
-  <div id="overlay">
-    <div id="panel">
-      <h1>🌾 농장 지키기 🐹</h1>
-      <p>두더지가 농작물을 망치기 전에 잡아주세요!</p>
-      <ul>
-        <li>🎯 <b>성공</b>: 두더지 20마리 잡기</li>
-        <li>❌ <b>실패</b>: 놓친 두더지 5마리</li>
-        <li>🖱️ <b>조작</b>: 두더지를 클릭</li>
-        <li>🔥 5마리 연속 잡으면 콤보 보너스!</li>
-        <li>⚡ 5마리 잡을 때마다 점점 빨라져요!</li>
-      </ul>
+  <div id="game-area">
+    <div id="grid-container"></div>
+    <div id="banner"><span>🔀</span><span>재배치!</span></div>
+    <div id="bonus-text">+ 보너스!</div>
+    
+    <div id="msg">
+      <h1 id="msgTitle">점 잇기 퍼즐</h1>
+      <p id="msgBody">
+        같은 색 점을 3개 이상 <span class="highlight">누른 채 드래그</span>해서 연결하세요.<br>
+        ※ 상하좌우로만 이동 가능 (대각선 X)<br>
+        <span class="highlight">※ 실수했다면 왔던 길로 되돌아가세요. (취소)</span><br>
+        <span style="color: #2a9d8f; font-weight: bold;">※ 기본 1점, 연결한 개수만큼 점수 추가!</span><br>
+        <span style="color: #e63946; font-size: 13px;">[어려움 모드] 2초마다 점이 무작위로 사라집니다!</span>
+      </p>
       
-      <div id="btnGroup">
-        <!-- '이어서 하기' 버튼 (처음엔 숨김 처리) -->
-        <button id="continueBtn" class="btn-resume" style="display: none;">이어서 하기</button>
-        <button id="startBtn" class="btn-restart">게임 시작</button>
+      <div id="pauseMenu" class="pause-menu hidden">
+        <div style="font-size: 14px; text-align: left; background: #f8f9fa; padding: 10px; border-radius: 8px; width: 100%; color: #333; line-height: 1.6;">
+          <div>조작: 점을 누른 채 드래그</div>
+          <div>취소: 왔던 길로 되돌아가기</div>
+          <div>완료: 손(마우스) 떼기</div>
+          <div style="margin-top: 5px; border-top: 1px solid #ddd; padding-top: 5px;">일시정지 해제: ESC</div>
+        </div>
+        <button class="btn small" id="btnSoundPause" style="width: 100%; padding: 10px;">소리: 꺼짐</button>
+        <div class="pause-controls">
+          <button class="icon-btn" id="btnResume" title="재개">▶</button>
+          <button class="icon-btn restart" id="btnRestart" title="재시작">↻</button>
+        </div>
       </div>
+
+      <button id="btnStart" class="action-btn">게임 시작</button>
     </div>
   </div>
-
-  <!-- 👇 일시정지 오버레이 -->
-  <div id="pauseOverlay" class="hidden">
-    <div id="pausePanel">
-      <h2>⏸️ 일시정지</h2>
-      <p>잠시 쉬어가세요!</p>
-      <div class="btn-group">
-        <button id="resumeBtn" class="btn-resume">이어서 하기</button>
-        <button id="restartBtn" class="btn-restart">처음부터</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 게임 로직 -->
-  <script src="game.js"></script>
+  <div id="status"></div>
+</div>
+<script src="game.js"></script>
 </body>
 </html>
