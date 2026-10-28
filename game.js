@@ -1,366 +1,524 @@
-/* =========================================================
-   게임 설정값
-   ========================================================= */
-const CONFIG = {
-  TOTAL_HOLES: 9,        // 구멍 개수 (3x3)
-  TARGET_CATCH: 20,      // 성공 조건: 몇 마리 잡기
-  MAX_DAMAGE: 5,         // 실패 조건: 몇 번 놓치면 끝
-  MOLE_UP_TIME: 2000,    // 두더지 올라와 있는 시간 (ms)
-  SPAWN_INTERVAL: 800,   // 두더지 기본 등장 간격 (800ms = 속도 1단계)
-  SPEED_STEP: 50,        // 👈 속도 1단계당 줄어들 간격 (10단계까지 오르도록 50으로 조정)
-  MIN_INTERVAL: 300,     // 최대 속도 (이보다 빨라지지 않음)
-  MAX_SPEED_LEVEL: 10,   // 👈 최대 속도 10단계로 상향
-  CATCH_PER_SPEEDUP: 5,  // 5마리 잡을 때마다 속도 1단계 상승
-  COMBO_START: 5,        // 콤보 시작 마릿수
-};
+(function () {
+  'use strict';
 
-/* =========================================================
-   게임 상태
-   ========================================================= */
-let state = {
-  caught: 0,
-  damage: 0,
-  combo: 0,
-  score: 0,
-  isPlaying: false,
-  isPaused: false,
-  activeHole: -1,
-  moleTimer: null,
-  upTimer: null,
-  speedLevel: 1, // 현재 속도 (1 ~ 10)
-};
-
-let bestScore = 0;
-let muted = false;
-let lastSpeedLevel = 1; // 게임 종료 시점의 속도를 기억하는 변수
-
-/* =========================================================
-   DOM 요소
-   ========================================================= */
-const fieldEl  = document.getElementById('field');
-const caughtEl = document.getElementById('caught');
-const damageEl = document.getElementById('damage');
-const comboEl  = document.getElementById('combo');
-const scoreEl  = document.getElementById('score');
-const bestEl   = document.getElementById('best');
-const muteBtn  = document.getElementById('muteBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-const overlay  = document.getElementById('overlay');
-const panel    = document.getElementById('panel');
-const startBtn = document.getElementById('startBtn'); 
-const pauseOverlay = document.getElementById('pauseOverlay');
-const resumeBtn = document.getElementById('resumeBtn');
-const restartBtn = document.getElementById('restartBtn');
-const speedAlert = document.getElementById('speedAlert');
-
-/* =========================================================
-   밭 생성
-   ========================================================= */
-function buildField() {
-  fieldEl.innerHTML = '';
-  for (let i = 0; i < CONFIG.TOTAL_HOLES; i++) {
-    const hole = document.createElement('div');
-    hole.className = 'hole';
-    hole.innerHTML = '<span class="mole">🐹</span>';
-    hole.addEventListener('click', () => onHoleClick(i));
-    fieldEl.appendChild(hole);
-  }
-}
-
-/* =========================================================
-   효과음
-   ========================================================= */
-let audioCtx = null;
-function playSound(type) {
-  if (muted) return;
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  const now = audioCtx.currentTime;
-
-  if (type === 'hit') {
-    osc.frequency.setValueAtTime(880, now);
-    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    osc.start(now); osc.stop(now + 0.1);
-  } else if (type === 'miss') {
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc.start(now); osc.stop(now + 0.3);
-  }
-}
-
-/* =========================================================
-   저장 / 불러오기
-   ========================================================= */
-const STORAGE_KEY = 'moleGameData';
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) throw new Error('no data');
-    const data = JSON.parse(raw);
-    bestScore = Number.isFinite(data.bestScore) ? data.bestScore : 0;
-    muted     = typeof data.muted === 'boolean' ? data.muted : false;
-  } catch (e) {
-    bestScore = 0; muted = false;
-  }
-  bestEl.textContent = bestScore;
-  updateMuteButton();
-}
-function saveData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bestScore, muted }));
-  } catch (e) { console.warn('저장 실패:', e); }
-}
-
-/* =========================================================
-   화면 갱신
-   ========================================================= */
-function updateHUD() {
-  caughtEl.textContent = state.caught;
-  damageEl.textContent = state.damage;
-  comboEl.textContent  = state.combo;
-  scoreEl.textContent  = state.score;
-  comboEl.classList.toggle('combo-hot', state.combo >= CONFIG.COMBO_START);
-}
-function updateMuteButton() {
-  muteBtn.textContent = muted ? '🔇' : '🔊';
-}
-function showSpeedAlert() {
-  speedAlert.classList.remove('show');
-  void speedAlert.offsetWidth; // 애니메이션 재시작 트릭
-  speedAlert.classList.add('show');
-}
-
-/* =========================================================
-   화면 청소 (두더지 내리기)
-   ========================================================= */
-function clearAllMoles() {
-  document.querySelectorAll('.hole.active').forEach(h => h.classList.remove('active'));
-  state.activeHole = -1;
-  clearTimeout(state.upTimer);
-  clearTimeout(state.moleTimer);
-}
-
-/* =========================================================
-   게임 시작 / 종료
-   ========================================================= */
-function startNewGame() {
-  lastSpeedLevel = 1; // '다시 도전'은 무조건 1단계부터
-  initGame(1);
-}
-
-function continueGame() {
-  initGame(lastSpeedLevel); // 👈 '이어서 하기'는 끝났던 속도부터
-}
-
-function initGame(speedLevel) {
-  clearAllMoles(); 
-
-  state = {
-    caught: 0, damage: 0, combo: 0, score: 0,
-    isPlaying: true, isPaused: false, activeHole: -1,
-    moleTimer: null, upTimer: null,
-    speedLevel: speedLevel,
-  };
-  updateHUD();
+  const MAX_MOVES = 30; 
+  const MIN_CONNECT = 3;
+  const FADE_DURATION = 300; 
+  const SHUFFLE_DURATION = 600;
+  const HARD_DISAPPEAR_INTERVAL = 2000; 
   
-  pauseBtn.textContent = '⏸️';
-  overlay.classList.add('hidden');
-  pauseOverlay.classList.add('hidden');
-  scheduleNextMole();
-}
+  const DIFFICULTY = {
+    easy: { name: '보통', size: 5 },
+    hard: { name: '어려움', size: 7 }
+  };
+  let currentDiff = 'easy';
 
-function endGame(win) {
-  state.isPlaying = false;
-  clearAllMoles(); 
+  const COLORS = { 'R': '#e63946', 'B': '#4dabf7', 'G': '#2a9d8f', 'Y': '#f4a261' };
 
-  if (state.score > bestScore) {
-    bestScore = state.score;
-    bestEl.textContent = bestScore;
-    saveData();
+  const STATE = { READY:'ready', PLAYING:'playing', PAUSED:'paused', WIN:'win', LOSE:'lose' };
+  let state = STATE.READY;
+
+  const game = {
+    gridSize: 5, moves: 0, score: 0, board: [], selectedPath: [], soundOn: false, best: 0, isAnimating: false, disappearTimer: null, round: 0 
+  };
+
+  const gridContainer = document.getElementById('grid-container');
+  const targetEl = document.getElementById('target');
+  const movesEl = document.getElementById('moves');
+  const bestEl = document.getElementById('best');
+  const msg = document.getElementById('msg');
+  const msgTitle = document.getElementById('msgTitle');
+  const msgBody = document.getElementById('msgBody');
+  const btnStart = document.getElementById('btnStart');
+  const pauseMenu = document.getElementById('pauseMenu');
+  const statusEl = document.getElementById('status');
+  const btnSound = document.getElementById('btnSound');
+  const btnSoundPause = document.getElementById('btnSoundPause');
+  const diffBtns = document.querySelectorAll('.diff-btn');
+  const bannerEl = document.getElementById('banner');
+  const bonusTextEl = document.getElementById('bonus-text');
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const lineSvg = document.createElementNS(SVG_NS, 'svg');
+  lineSvg.id = 'drag-line';
+  const linePoly = document.createElementNS(SVG_NS, 'polyline');
+  lineSvg.appendChild(linePoly);
+  gridContainer.appendChild(lineSvg);
+
+  let audioCtx = null;
+  let activeNodes = [];
+  function beep(freq, dur, type) {
+    if (!game.soundOn) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.value = freq;
+      g.gain.value = 0.05;
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start();
+      const node = { osc, g };
+      activeNodes.push(node);
+      setTimeout(() => {
+        try { osc.stop(); } catch(e){}
+        activeNodes = activeNodes.filter(n => n !== node);
+      }, dur * 1000);
+    } catch(e) {}
+  }
+  function stopAllSound() {
+    activeNodes.forEach(n => { try { n.osc.stop(); } catch(e){} });
+    activeNodes = [];
   }
 
-  // 👇 게임이 끝난 시점의 속도를 기억합니다. (이어서 하기 위함)
-  lastSpeedLevel = state.speedLevel; 
-
-  panel.innerHTML = win
-    ? `<h2>🎉 성공! 농장을 지켰어요!</h2>
-       <p>잡은 두더지: <b>${state.caught}</b>마리</p>
-       <p>최종 점수: <b>${state.score}</b></p>
-       <div class="btn-group">
-         <button id="continueBtn" class="btn-resume">이어서 하기</button>
-         <button id="startBtn" class="btn-restart">다시 도전</button>
-       </div>`
-    : `<h2>😢 실패... 농작물이 망가졌어요</h2>
-       <p>잡은 두더지: <b>${state.caught}</b>마리</p>
-       <p>최종 점수: <b>${state.score}</b></p>
-       <div class="btn-group">
-         <button id="continueBtn" class="btn-resume">이어서 하기</button>
-         <button id="startBtn" class="btn-restart">다시 도전</button>
-       </div>`;
-
-  document.getElementById('startBtn').addEventListener('click', startNewGame);
-  document.getElementById('continueBtn').addEventListener('click', continueGame);
-  overlay.classList.remove('hidden');
-}
-
-/* =========================================================
-   두더지 등장 / 도망
-   ========================================================= */
-function scheduleNextMole() {
-  if (!state.isPlaying || state.isPaused) return;
-
-  const currentInterval = Math.max(
-    CONFIG.MIN_INTERVAL, 
-    CONFIG.SPAWN_INTERVAL - ((state.speedLevel - 1) * CONFIG.SPEED_STEP)
-  );
-
-  state.moleTimer = setTimeout(() => {
-    if (!state.isPlaying || state.isPaused) return;
-    spawnMole();
-    scheduleNextMole();
-  }, currentInterval);
-}
-
-function spawnMole() {
-  if (state.activeHole !== -1) return;
-  const idx = Math.floor(Math.random() * CONFIG.TOTAL_HOLES);
-  state.activeHole = idx;
-  fieldEl.children[idx].classList.add('active');
-
-  state.upTimer = setTimeout(() => {
-    if (state.isPaused) return; 
-    if (state.activeHole === idx) moleEscaped();
-  }, CONFIG.MOLE_UP_TIME);
-}
-
-function moleEscaped() {
-  if (state.activeHole !== -1) {
-    fieldEl.children[state.activeHole].classList.remove('active');
+  function updateSoundButtons() {
+    const text = '소리: ' + (game.soundOn ? '켜짐' : '꺼짐');
+    btnSound.textContent = text;
+    if (btnSoundPause) btnSoundPause.textContent = text;
   }
-  state.activeHole = -1;
-  clearTimeout(state.upTimer);
 
-  state.damage++;
-  state.combo = 0;
-  playSound('miss');
-  updateHUD();
+  function toggleSound() {
+    game.soundOn = !game.soundOn;
+    if (!game.soundOn) stopAllSound();
+    updateSoundButtons();
+  }
 
-  if (state.damage >= CONFIG.MAX_DAMAGE) endGame(false);
-}
+  const SAVE_KEY = 'dotConnectSave_v1';
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return { best: 0 };
+      const obj = JSON.parse(raw);
+      const best = Number(obj && obj.best);
+      return { best: Number.isFinite(best) && best >= 0 ? best : 0 };
+    } catch(e) { return { best: 0 }; }
+  }
+  function saveBest() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ best: game.best })); } catch(e) {}
+  }
 
-/* =========================================================
-   구멍 클릭
-   ========================================================= */
-function onHoleClick(idx) {
-  if (!state.isPlaying || state.isPaused) return;
-  if (state.activeHole !== idx) return;
+  function startDisappearTimer() {
+    stopDisappearTimer();
+    if (currentDiff !== 'hard') return;
 
-  fieldEl.children[idx].classList.remove('active');
-  state.activeHole = -1;
-  clearTimeout(state.upTimer);
+    game.disappearTimer = setInterval(() => {
+      if (state !== STATE.PLAYING || game.isAnimating) return;
+      
+      const aliveDots = [];
+      for (let r = 0; r < game.gridSize; r++) {
+        for (let c = 0; c < game.gridSize; c++) {
+          if (game.board[r][c]) aliveDots.push({ r, c });
+        }
+      }
 
-  state.caught++;
-  state.combo++;
+      if (aliveDots.length > 10) { 
+        const target = aliveDots[Math.floor(Math.random() * aliveDots.length)];
+        if (!game.selectedPath.some(p => p.r === target.r && p.c === target.c)) {
+          const cell = document.querySelector(`[data-pos="${target.r}-${target.c}"]`);
+          if (cell) {
+            cell.classList.add('fading-out');
+            beep(250, 0.1, 'triangle');
+            setTimeout(() => {
+              game.board[target.r][target.c] = { color: ['R','B','G','Y'][Math.floor(Math.random()*4)], selected: false };
+              renderGrid();
+            }, FADE_DURATION);
+          }
+        }
+      }
+    }, HARD_DISAPPEAR_INTERVAL);
+  }
 
-  let point = 1;
-  if (state.combo >= CONFIG.COMBO_START) point = 2;
-  state.score += point;
+  function stopDisappearTimer() {
+    if (game.disappearTimer) { clearInterval(game.disappearTimer); game.disappearTimer = null; }
+  }
 
-  playSound('hit');
-  updateHUD();
+  function resetRound() {
+    stopDisappearTimer();
+    game.round++;
+    bannerEl.classList.remove('show');
+    bonusTextEl.classList.remove('show');
+    game.moves = 0; game.score = 0; game.board = []; game.selectedPath = []; game.isAnimating = false;
+    game.gridSize = DIFFICULTY[currentDiff].size;
+    
+    for (let r = 0; r < game.gridSize; r++) {
+      const row = [];
+      for (let c = 0; c < game.gridSize; c++) {
+        row.push({ color: ['R','B','G','Y'][Math.floor(Math.random()*4)], selected: false });
+      }
+      game.board.push(row);
+    }
+    
+    gridContainer.style.gridTemplateColumns = `repeat(${game.gridSize}, 1fr)`;
+    gridContainer.style.gridTemplateRows = `repeat(${game.gridSize}, 1fr)`;
+    
+    if (!checkAvailableMoves()) shuffleBoard();
+    
+    updateHUD();
+    renderGrid();
+  }
 
-  if (state.caught % CONFIG.CATCH_PER_SPEEDUP === 0) {
-    if (state.speedLevel < CONFIG.MAX_SPEED_LEVEL) {
-      state.speedLevel++;
-      showSpeedAlert();
-      clearTimeout(state.moleTimer);
-      scheduleNextMole(); 
+  function startGame() {
+    resetRound();
+    state = STATE.PLAYING;
+    msg.classList.add('hidden');
+    pauseMenu.classList.add('hidden');
+    startDisappearTimer(); 
+    setStatus('진행 중: 같은 색 점을 드래그해서 3개 이상 연결하세요.');
+  }
+
+  function endGame(isWin) {
+    state = isWin ? STATE.WIN : STATE.LOSE;
+    stopDisappearTimer(); 
+    if (game.score > game.best) { game.best = game.score; saveBest(); }
+    msgTitle.textContent = isWin ? '게임 클리어!' : '게임 종료';
+    msgBody.innerHTML = `점수: ${game.score} / 최고: ${game.best}`;
+    btnStart.textContent = '다시 시작';
+    pauseMenu.classList.add('hidden');
+    btnStart.style.display = 'block';
+    msg.classList.remove('hidden');
+    setStatus(isWin ? '승리' : '패배');
+  }
+
+  function togglePause() {
+    if (game.isAnimating) return; 
+    if (state === STATE.PLAYING) {
+      cancelDrag();
+      state = STATE.PAUSED;
+      stopDisappearTimer(); 
+      msgTitle.textContent = '일시정지';
+      msgBody.innerHTML = 'ESC를 누르거나 ▶ 버튼을 눌러 재개하세요.';
+      btnStart.style.display = 'none';
+      pauseMenu.classList.remove('hidden');
+      msg.classList.remove('hidden');
+      setStatus('일시정지');
+    } else if (state === STATE.PAUSED) {
+      state = STATE.PLAYING;
+      startDisappearTimer(); 
+      pauseMenu.classList.add('hidden');
+      msg.classList.add('hidden');
+      setStatus('진행 중: 같은 색 점을 드래그해서 3개 이상 연결하세요.');
     }
   }
 
-  if (state.caught >= CONFIG.TARGET_CATCH) endGame(true);
-}
+  function checkAvailableMoves() {
+    const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+    const size = game.gridSize;
 
-/* =========================================================
-   포커스 이탈 시 자동 일시정지
-   ========================================================= */
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    if (state.isPlaying && !state.isPaused) {
-      state.isPaused = true;
-      pauseBtn.textContent = '▶️';
-      pauseOverlay.classList.remove('hidden');
-      
-      clearTimeout(state.moleTimer);
-      clearTimeout(state.upTimer);
-      
-      if (state.activeHole !== -1) {
-        fieldEl.children[state.activeHole].classList.remove('active');
-        state.activeHole = -1;
+    for (let startR = 0; startR < size; startR++) {
+      for (let startC = 0; startC < size; startC++) {
+        const startDot = game.board[startR][startC];
+        if (!startDot) continue;
+
+        const targetColor = startDot.color;
+        const visited = Array.from({ length: size }, () => Array(size).fill(false));
+        
+        function dfs(r, c, count) {
+          if (count >= 3) return true;
+
+          for (let d of dirs) {
+            const nr = r + d[0], nc = c + d[1];
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size) {
+              const nextDot = game.board[nr][nc];
+              if (!visited[nr][nc] && nextDot && nextDot.color === targetColor) {
+                visited[nr][nc] = true;
+                if (dfs(nr, nc, count + 1)) return true;
+                visited[nr][nc] = false;
+              }
+            }
+          }
+          return false;
+        }
+
+        visited[startR][startC] = true;
+        if (dfs(startR, startC, 1)) return true;
       }
     }
+    return false;
   }
-});
 
-/* =========================================================
-   버튼 이벤트: 일시정지
-   ========================================================= */
-pauseBtn.addEventListener('click', () => {
-  if (!state.isPlaying || state.isPaused) return;
-
-  state.isPaused = true;
-  pauseBtn.textContent = '▶️';
-  pauseOverlay.classList.remove('hidden');
-  
-  clearTimeout(state.moleTimer);
-  clearTimeout(state.upTimer);
-});
-
-/* =========================================================
-   버튼 이벤트: 일시정지 화면 내부 버튼
-   ========================================================= */
-resumeBtn.addEventListener('click', () => {
-  if (!state.isPlaying || !state.isPaused) return;
-
-  state.isPaused = false;
-  pauseBtn.textContent = '⏸️';
-  pauseOverlay.classList.add('hidden');
-
-  if (state.activeHole !== -1) {
-    const idx = state.activeHole;
-    state.upTimer = setTimeout(() => {
-      if (state.isPaused) return;
-      if (state.activeHole === idx) moleEscaped();
-    }, CONFIG.MOLE_UP_TIME);
+  function shuffleBoard() {
+    for (let r = 0; r < game.gridSize; r++) {
+      for (let c = 0; c < game.gridSize; c++) {
+        game.board[r][c] = { color: ['R','B','G','Y'][Math.floor(Math.random()*4)], selected: false };
+      }
+    }
+    if (!checkAvailableMoves()) shuffleBoard();
   }
-  scheduleNextMole();
-});
 
-restartBtn.addEventListener('click', () => {
-  pauseOverlay.classList.add('hidden');
-  startNewGame();
-});
+  function checkWin() { if (game.moves >= MAX_MOVES) endGame(false); }
 
-/* =========================================================
-   버튼 이벤트: 음소거
-   ========================================================= */
-muteBtn.addEventListener('click', () => {
-  muted = !muted;
-  updateMuteButton();
-  saveData();
-});
+  let dragging = false;
+  let activePointerId = null;
+  let lastX = 0, lastY = 0;
 
-/* =========================================================
-   초기 실행
-   ========================================================= */
-buildField();
-loadData();
-updateHUD();
-startBtn.addEventListener('click', startNewGame);
+  function cellFromPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const cell = el && el.closest ? el.closest('.dot-cell') : null;
+    if (!cell || !cell.dataset.pos || !gridContainer.contains(cell)) return null;
+    const [r, c] = cell.dataset.pos.split('-').map(Number);
+    return { r, c };
+  }
+
+  function startDrag(r, c) {
+    if (state !== STATE.PLAYING || game.isAnimating) return false;
+    const dot = game.board[r][c];
+    if (!dot) return false;
+    game.selectedPath = [{ r, c }];
+    dot.selected = true;
+    dragging = true;
+    beep(400, 0.05, 'sine');
+    refreshSelection();
+    return true;
+  }
+
+  function extendDrag(r, c) {
+    const path = game.selectedPath;
+    if (!path.length) return;
+    const last = path[path.length - 1];
+    if (last.r === r && last.c === c) return;
+    const dot = game.board[r][c];
+    if (!dot) return;
+
+    if (path.length >= 2) {
+      const prev = path[path.length - 2];
+      if (prev.r === r && prev.c === c) {
+        game.board[last.r][last.c].selected = false;
+        path.pop();
+        beep(350, 0.05, 'sine');
+        refreshSelection();
+        return;
+      }
+    }
+
+    if (path.some(p => p.r === r && p.c === c)) return;
+    if (dot.color !== game.board[last.r][last.c].color) return;
+    if (Math.abs(r - last.r) + Math.abs(c - last.c) !== 1) return;
+
+    path.push({ r, c });
+    dot.selected = true;
+    beep(400 + path.length * 40, 0.05, 'sine');
+    refreshSelection();
+  }
+
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    activePointerId = null;
+    const path = game.selectedPath;
+    if (path.length >= MIN_CONNECT) {
+      commitPath(path);
+    } else {
+      if (path.length > 1) beep(300, 0.1, 'triangle');
+      clearSelection();
+    }
+  }
+
+  function cancelDrag() {
+    if (!dragging) return;
+    dragging = false;
+    activePointerId = null;
+    clearSelection();
+  }
+
+  function commitPath(path) {
+    game.isAnimating = true;
+    
+    let earnedScore = 1 + (path.length - 3);
+    
+    if (path.length >= 5) {
+      showBonusText();
+    }
+    
+    game.score += earnedScore;
+    game.moves++;
+    updateHUD();
+
+    path.forEach(p => {
+      const cell = document.querySelector(`[data-pos="${p.r}-${p.c}"]`);
+      if (cell) cell.classList.add('fading-out');
+    });
+
+    beep(800, 0.1, 'square');
+
+    setTimeout(() => {
+      path.forEach(p => { game.board[p.r][p.c] = null; });
+      for (let i = 0; i < game.gridSize; i++) {
+        for (let j = 0; j < game.gridSize; j++) {
+          if (game.board[i][j] === null) game.board[i][j] = { color: ['R','B','G','Y'][Math.floor(Math.random()*4)], selected: false };
+        }
+      }
+      clearSelection();
+      if (!checkAvailableMoves()) {
+        reshuffleWithBanner();
+      } else {
+        game.isAnimating = false;
+      }
+      checkWin();
+    }, FADE_DURATION);
+  }
+
+  function showBonusText() {
+    bonusTextEl.classList.remove('show');
+    void bonusTextEl.offsetWidth; 
+    bonusTextEl.classList.add('show');
+  }
+
+  function showBanner() {
+    bannerEl.classList.remove('show');
+    void bannerEl.offsetWidth;
+    bannerEl.classList.add('show');
+  }
+
+  function reshuffleWithBanner() {
+    const round = game.round;
+    game.isAnimating = true; 
+    setStatus('움직일 수 있는 곳이 없습니다! 판을 재배치합니다.');
+    showBanner();
+    setTimeout(() => {
+      if (round !== game.round) return;
+      shuffleBoard();
+      recolorGrid();
+      setTimeout(() => {
+        if (round !== game.round) return;
+        game.isAnimating = false;
+        if (state === STATE.PLAYING) setStatus('진행 중: 같은 색 점을 드래그해서 3개 이상 연결하세요.');
+      }, 800);
+    }, 500);
+  }
+
+  function recolorGrid() {
+    gridContainer.querySelectorAll('.dot-cell').forEach(cell => {
+      const [r, c] = cell.dataset.pos.split('-').map(Number);
+      const dot = game.board[r][c];
+      if (dot) cell.style.backgroundColor = COLORS[dot.color];
+    });
+  }
+
+  function refreshSelection() {
+    gridContainer.querySelectorAll('.dot-cell').forEach(cell => {
+      const [r, c] = cell.dataset.pos.split('-').map(Number);
+      const dot = game.board[r][c];
+      cell.classList.toggle('selected', !!(dot && dot.selected));
+    });
+    drawLine();
+  }
+
+  function drawLine() {
+    const path = game.selectedPath;
+    if (path.length < 2) { linePoly.setAttribute('points', ''); return; }
+    const first = game.board[path[0].r][path[0].c];
+    if (first) linePoly.setAttribute('stroke', COLORS[first.color]);
+    const pts = [];
+    path.forEach(p => {
+      const cell = gridContainer.querySelector(`[data-pos="${p.r}-${p.c}"]`);
+      if (cell) pts.push((cell.offsetLeft + cell.offsetWidth / 2) + ',' + (cell.offsetTop + cell.offsetHeight / 2));
+    });
+    linePoly.setAttribute('points', pts.join(' '));
+  }
+
+  function clearSelection() {
+    game.selectedPath.forEach(p => { if (game.board[p.r][p.c]) game.board[p.r][p.c].selected = false; });
+    game.selectedPath = [];
+    renderGrid();
+  }
+
+  function renderGrid() {
+    gridContainer.querySelectorAll('.dot-cell').forEach(el => el.remove());
+    for (let r = 0; r < game.gridSize; r++) {
+      for (let c = 0; c < game.gridSize; c++) {
+        const dot = game.board[r][c];
+        const cell = document.createElement('div');
+        cell.className = 'dot-cell';
+        cell.dataset.pos = `${r}-${c}`;
+        if (dot) {
+          cell.style.backgroundColor = COLORS[dot.color];
+          if (dot.selected) cell.classList.add('selected');
+        }
+        gridContainer.appendChild(cell);
+      }
+    }
+    drawLine();
+  }
+
+  function updateHUD() {
+    targetEl.textContent = game.score;
+    movesEl.textContent = game.moves + ' / ' + MAX_MOVES;
+    bestEl.textContent = game.best;
+  }
+  function setStatus(t) { statusEl.textContent = t; }
+
+  function onKeyDown(e) {
+    if (e.repeat) return;
+    const k = e.key.toLowerCase();
+    if (k === 'escape' || k === 'p') { togglePause(); e.preventDefault(); return; }
+    if (k === 'enter' && (state === STATE.READY || state === STATE.WIN || state === STATE.LOSE)) { startGame(); }
+  }
+
+  diffBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newDiff = btn.dataset.diff;
+      if (currentDiff === newDiff) return;
+      currentDiff = newDiff;
+      diffBtns.forEach(b => { if (b.dataset.diff === newDiff) b.classList.add('active'); else b.classList.remove('active'); });
+      setStatus(`난이도 변경: ${DIFFICULTY[newDiff].size}x${DIFFICULTY[newDiff].size} (새 게임 시작)`);
+      startGame(); 
+    });
+  });
+
+  gridContainer.addEventListener('pointerdown', (e) => {
+    if (dragging) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const p = cellFromPoint(e.clientX, e.clientY);
+    if (!p) return;
+    e.preventDefault();
+    if (startDrag(p.r, p.c)) {
+      activePointerId = e.pointerId;
+      lastX = e.clientX; lastY = e.clientY;
+      try { gridContainer.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+
+  gridContainer.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    if (state !== STATE.PLAYING) return;
+    e.preventDefault();
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 10));
+    for (let i = 1; i <= steps; i++) {
+      const p = cellFromPoint(lastX + dx * i / steps, lastY + dy * i / steps);
+      if (p) extendDrag(p.r, p.c);
+    }
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  function releasePointer(e) {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    try { gridContainer.releasePointerCapture(e.pointerId); } catch (err) {}
+    if (e.type === 'pointercancel') cancelDrag();
+    else endDrag();
+  }
+  gridContainer.addEventListener('pointerup', releasePointer);
+  gridContainer.addEventListener('pointercancel', releasePointer);
+  gridContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('blur', () => { if (state === STATE.PLAYING) togglePause(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === STATE.PLAYING) togglePause();
+  });
+
+  btnStart.addEventListener('click', startGame);
+  document.getElementById('btnResume').addEventListener('click', togglePause);
+  document.getElementById('btnRestart').addEventListener('click', () => { startGame(); });
+  document.getElementById('btnPause').addEventListener('click', togglePause);
+  btnSound.addEventListener('click', toggleSound);
+  btnSoundPause.addEventListener('click', toggleSound);
+
+  const saved = loadSave();
+  game.best = saved.best;
+  updateSoundButtons();
+  updateHUD();
+  setStatus('시작 버튼을 누르세요');
+  resetRound();
+})();
