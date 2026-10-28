@@ -1,221 +1,80 @@
-/* ===== 기본 리셋 ===== */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #f7f9fc; font-family: system-ui, sans-serif; color: #333; touch-action: manipulation; }
+#app { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 8px; gap: 6px; }
 
-body {
-  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-  background: #87CEEB; /* 하늘색 */
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
+/* 상단 HUD */
+#topbar { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 12px; border-radius: 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+#hud-info { display: flex; gap: 15px; font-weight: bold; color: #555; }
+#hud-info span { color: #e63946; font-weight: bold; }
+.btn.small { padding: 6px 10px; font-size: 12px; background: #eee; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.btn.small:active { filter: brightness(0.9); }
+
+/* 난이도 선택 */
+.diff-group { display: flex; gap: 4px; }
+.diff-btn { padding: 4px 8px; font-size: 12px; background: #f0f0f0; color: #888; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+.diff-btn.active { background: #4dabf7; color: #fff; border-color: #4dabf7; font-weight: bold; }
+.diff-btn:hover:not(.active) { background: #e0e0e0; color: #333; }
+
+/* 게임 영역 */
+#game-area { flex: 1; position: relative; background: #fff; border-radius: 12px; overflow: hidden; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 20px; }
+
+/* Grid 레이아웃 */
+#grid-container { display: grid; gap: 10px; width: 100%; max-width: 500px; aspect-ratio: 1 / 1; margin: 0 auto; position: relative; touch-action: none; }
+
+/* 드래그 연결선 */
+#drag-line { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+#drag-line polyline { fill: none; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; }
+
+/* 각 동그라미 칸 */
+.dot-cell { border-radius: 50%; cursor: pointer; transition: transform 0.3s ease-in-out, background-color 0.4s ease-in-out, opacity 0.3s ease-in-out; opacity: 1; }
+.dot-cell.shuffling { transform: rotate(180deg) scale(0.8); opacity: 0; }
+.dot-cell.fading-out { opacity: 0; transform: scale(0.5); pointer-events: none; }
+.dot-cell.selected { border: 4px solid #333; transform: scale(1.1); z-index: 2; }
+
+/* 재배치 안내 배너 */
+#banner { position: absolute; left: 50%; top: 20px; transform: translate(-50%, 0) scale(0.8); z-index: 6; pointer-events: none; opacity: 0; display: flex; align-items: center; gap: 8px; font-size: 24px; font-weight: 900; white-space: nowrap; color: #f4c430; -webkit-text-stroke: 1px #c0392b; paint-order: stroke fill; text-shadow: 0 2px 0 #c0392b, 0 4px 8px rgba(0,0,0,0.2); }
+#banner.show { animation: bannerPop 1.3s ease-in-out forwards; }
+@keyframes bannerPop {
+  0%   { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
+  20%  { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  80%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -20px) scale(1); }
 }
 
-/* 게임 전체 컨테이너 */
-#game {
-  width: 100%;
-  max-width: 480px;
-  background: #8B4513; /* 흙갈색 */
-  border: 6px solid #5C2E0E;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+/* 보너스 텍스트 */
+#bonus-text { position: absolute; left: 50%; top: 20px; transform: translate(-50%, 0); z-index: 7; pointer-events: none; opacity: 0; font-size: 24px; font-weight: 900; color: #2a9d8f; text-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
+#bonus-text.show { animation: bonusPop 1s ease-out forwards; }
+@keyframes bonusPop {
+  0%   { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
+  20%  { opacity: 1; transform: translate(-50%, 0px) scale(1.1); }
+  80%  { opacity: 1; transform: translate(-50%, 0px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -20px) scale(1); }
 }
 
-/* 상단 상태 표시 (한 줄 고정) */
-#hud {
-  background: #FFF8DC;
-  border: 3px solid #5C2E0E;
-  border-radius: 10px;
-  padding: 10px 8px;
-  margin-bottom: 12px;
-  font-size: 13px; /* 글자 크기 축소 */
-  font-weight: bold;
-  color: #3E1F00;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+/* 중앙 메시지 오버레이 */
+#msg { position: absolute; inset: 0; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; z-index: 10; border-radius: 12px; padding: 20px; text-align: center; }
+#msg.hidden { display: none; }
+#msg h1 { font-size: 26px; color: #e63946; font-weight: 800; }
+#msg p { font-size: 15px; line-height: 1.6; color: #666; word-break: keep-all; }
+#msg .highlight { color: #e63946; font-weight: bold; }
 
-@media (max-width: 400px) {
-  #hud { font-size: 11px; padding: 8px 4px; }
-}
+.action-btn { padding: 12px 30px; font-size: 18px; font-weight: bold; background: #e63946; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(230, 57, 70, 0.3); }
+.action-btn:active { filter: brightness(0.9); transform: translateY(2px); box-shadow: none; }
 
-/* 3x3 밭 */
-#field {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 12px;
-}
+/* 일시정지 */
+.pause-menu { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 300px; }
+.pause-controls { display: flex; gap: 15px; justify-content: center; width: 100%; }
+.icon-btn { font-size: 24px; width: 50px; height: 50px; border-radius: 50%; border: none; background: #f0f0f0; color: #333; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.icon-btn:active { filter: brightness(0.9); }
+.icon-btn.restart { background: #e63946; color: white; }
 
-/* 구멍 하나 */
-.hole {
-  aspect-ratio: 1 / 1;
-  background: #4A2505;
-  border-radius: 50%;
-  border: 4px solid #2E1400;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 40px;
-  user-select: none;
-  overflow: hidden;
-  position: relative;
-}
+#status { font-size: 13px; text-align: center; color: #888; min-height: 18px; font-weight: bold; }
 
-/* 두더지 이모지 (기본은 아래로 숨김) */
-.hole .mole {
-  transform: translateY(100%);
-  transition: transform 0.15s ease-out;
+@media (max-width: 500px) {
+  #hud-info { gap: 8px; font-size: 12px; }
+  #msg h1 { font-size: 22px; }
+  #banner { font-size: 20px; top: 10px; }
+  #msg p { font-size: 13px; }
+  #grid-container { gap: 6px; }
+  #bonus-text { font-size: 20px; top: 10px; }
 }
-
-/* 두더지 활성화 상태 */
-.hole.active .mole {
-  transform: translateY(0);
-}
-
-/* 하단 정보 */
-#footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #FFF8DC;
-  font-weight: bold;
-  font-size: 14px;
-}
-
-#footer > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 공통 버튼 스타일 */
-#muteBtn, #pauseBtn {
-  background: #FFF8DC;
-  border: 2px solid #5C2E0E;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-/* ===== 속도 UP 알림 ===== */
-#speedAlert {
-  position: fixed;
-  top: 30%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0.5);
-  font-size: 40px;
-  font-weight: 900;
-  color: #FFEB3B;
-  text-shadow: 3px 3px 0 #D32F2F, -2px -2px 0 #D32F2F, 2px -2px 0 #D32F2F, -2px 2px 0 #D32F2F;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 100;
-}
-
-#speedAlert.show {
-  animation: popUp 1s ease-out forwards;
-}
-
-@keyframes popUp {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
-}
-
-/* ===== 공통 오버레이 (시작/결과) ===== */
-#overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  z-index: 10;
-}
-#overlay.hidden { display: none; }
-
-/* ===== 일시정지 오버레이 ===== */
-#pauseOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 20;
-}
-#pauseOverlay.hidden { display: none; }
-
-#pausePanel {
-  background: #FFF8DC;
-  border: 6px solid #5C2E0E;
-  border-radius: 16px;
-  padding: 24px;
-  max-width: 320px;
-  width: 100%;
-  text-align: center;
-  color: #3E1F00;
-}
-#pausePanel h2 { font-size: 24px; margin-bottom: 8px; }
-#pausePanel p { font-size: 14px; margin-bottom: 20px; }
-
-/* ===== 패널(시작/결과/일시정지) 내부 공통 ===== */
-#panel, #pausePanel {
-  background: #FFF8DC;
-  border: 6px solid #5C2E0E;
-  border-radius: 16px;
-  padding: 24px;
-  max-width: 420px;
-  width: 100%;
-  text-align: center;
-  color: #3E1F00;
-}
-#panel h1 { font-size: 24px; margin-bottom: 12px; }
-#panel h2 { font-size: 22px; margin-bottom: 12px; }
-#panel p  { font-size: 14px; line-height: 1.7; margin-bottom: 8px; }
-#panel ul { text-align: left; margin: 12px 0 16px 20px; font-size: 14px; line-height: 1.9; }
-
-/* ===== 버튼 그룹 정렬 ===== */
-#btnGroup, .btn-group {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-/* 공통 게임 버튼 (노란색) */
-.btn-restart {
-  background: #FFB300;
-  color: #3E1F00;
-  border: 3px solid #5C2E0E;
-  border-radius: 10px;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.btn-restart:hover { background: #FFC933; }
-
-/* 이어서 하기 버튼 (초록색) */
-.btn-resume {
-  background: #4CAF50;
-  color: white;
-  border: 3px solid #5C2E0E;
-  border-radius: 10px;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.btn-resume:hover { background: #66BB6A; }
-
-/* 콤보 강조 */
-.combo-hot { color: #E65100; }
