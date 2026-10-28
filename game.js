@@ -1,8 +1,10 @@
 (function () {
   'use strict';
 
+  // ---------- 상수 ----------
   const MAX_MOVES = 30; 
   const MIN_CONNECT = 3;
+  const BONUS_FROM = 5; 
   const FADE_DURATION = 300; 
   const SHUFFLE_DURATION = 600;
   const HARD_DISAPPEAR_INTERVAL = 2000; 
@@ -15,6 +17,7 @@
 
   const COLORS = { 'R': '#e63946', 'B': '#4dabf7', 'G': '#2a9d8f', 'Y': '#f4a261' };
 
+  // ---------- 상태 ----------
   const STATE = { READY:'ready', PLAYING:'playing', PAUSED:'paused', WIN:'win', LOSE:'lose' };
   let state = STATE.READY;
 
@@ -22,6 +25,7 @@
     gridSize: 5, moves: 0, score: 0, board: [], selectedPath: [], soundOn: false, best: 0, isAnimating: false, disappearTimer: null, round: 0 
   };
 
+  // ---------- DOM ----------
   const gridContainer = document.getElementById('grid-container');
   const targetEl = document.getElementById('target');
   const movesEl = document.getElementById('moves');
@@ -45,6 +49,7 @@
   lineSvg.appendChild(linePoly);
   gridContainer.appendChild(lineSvg);
 
+  // ---------- 오디오 ----------
   let audioCtx = null;
   let activeNodes = [];
   function beep(freq, dur, type) {
@@ -84,6 +89,7 @@
     updateSoundButtons();
   }
 
+  // ---------- 저장 ----------
   const SAVE_KEY = 'dotConnectSave_v1';
   function loadSave() {
     try {
@@ -98,6 +104,7 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ best: game.best })); } catch(e) {}
   }
 
+  // ---------- 타이머 ----------
   function startDisappearTimer() {
     stopDisappearTimer();
     if (currentDiff !== 'hard') return;
@@ -133,6 +140,7 @@
     if (game.disappearTimer) { clearInterval(game.disappearTimer); game.disappearTimer = null; }
   }
 
+  // ---------- 초기화 ----------
   function resetRound() {
     stopDisappearTimer();
     game.round++;
@@ -201,6 +209,7 @@
     }
   }
 
+  // ⭐️ DFS(깊이 우선 탐색)를 사용해 꺾인 경로까지 완벽하게 탐색
   function checkAvailableMoves() {
     const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
     const size = game.gridSize;
@@ -248,6 +257,7 @@
 
   function checkWin() { if (game.moves >= MAX_MOVES) endGame(false); }
 
+  // ---------- 드래그 입력 ----------
   let dragging = false;
   let activePointerId = null;
   let lastX = 0, lastY = 0;
@@ -326,8 +336,8 @@
     
     let earnedScore = 1 + (path.length - 3);
     
-    if (path.length >= 5) {
-      showBonusText();
+    if (path.length >= BONUS_FROM) {
+      showBonusText(path.length - 3);
     }
     
     game.score += earnedScore;
@@ -358,12 +368,14 @@
     }, FADE_DURATION);
   }
 
-  function showBonusText() {
+  function showBonusText(extra) {
+    bonusTextEl.textContent = `보너스 점수! +${extra}`;
     bonusTextEl.classList.remove('show');
     void bonusTextEl.offsetWidth; 
     bonusTextEl.classList.add('show');
   }
 
+  // ---------- 재배치 ----------
   function showBanner() {
     bannerEl.classList.remove('show');
     void bannerEl.offsetWidth;
@@ -423,6 +435,7 @@
     renderGrid();
   }
 
+  // ---------- 렌더링 ----------
   function renderGrid() {
     gridContainer.querySelectorAll('.dot-cell').forEach(el => el.remove());
     for (let r = 0; r < game.gridSize; r++) {
@@ -448,6 +461,7 @@
   }
   function setStatus(t) { statusEl.textContent = t; }
 
+  // ---------- 이벤트 ----------
   function onKeyDown(e) {
     if (e.repeat) return;
     const k = e.key.toLowerCase();
@@ -512,9 +526,11 @@
   document.getElementById('btnResume').addEventListener('click', togglePause);
   document.getElementById('btnRestart').addEventListener('click', () => { startGame(); });
   document.getElementById('btnPause').addEventListener('click', togglePause);
+  
   btnSound.addEventListener('click', toggleSound);
   btnSoundPause.addEventListener('click', toggleSound);
 
+  // ---------- 시작 ----------
   const saved = loadSave();
   game.best = saved.best;
   updateSoundButtons();
